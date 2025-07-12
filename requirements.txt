@@ -1,0 +1,5 @@
+flask
+openai
+dotenv
+psycopg[binary]
+requests
