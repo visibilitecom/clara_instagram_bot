@@ -1,4 +1,3 @@
-
 import os
 import time
 import random
@@ -45,7 +44,7 @@ def save_user(uid, data):
         conn.commit()
 
 def send_message_ig(user_id, text):
-    url = f"https://graph.facebook.com/v18.0/me/messages"
+    url = "https://graph.facebook.com/v18.0/me/messages"
     headers = {"Content-Type": "application/json"}
     payload = {
         "messaging_product": "instagram",
@@ -56,8 +55,12 @@ def send_message_ig(user_id, text):
 
 @app.route('/webhook', methods=['GET'])
 def verify():
-    if request.args.get("hub.mode") == "subscribe" and request.args.get("hub.verify_token") == VERIFY_TOKEN:
-        return request.args.get("hub.challenge")
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
     return "Erreur de vérification", 403
 
 @app.route('/webhook', methods=['POST'])
