@@ -1,11 +1,10 @@
+
 import os
 import time
 import random
 import json
 import requests
-from threading import Thread
-from datetime import datetime
-from flask import Flask, request, send_from_directory
+from flask import Flask, request
 from dotenv import load_dotenv
 import openai
 import psycopg
@@ -18,16 +17,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not all([VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, DATABASE_URL]):
-    raise ValueError("❌ VERIFY_TOKEN / PAGE_ACCESS_TOKEN / OPENAI_API_KEY / DATABASE_URL manquant.")
+    raise ValueError("❌ Une ou plusieurs variables d'environnement sont manquantes.")
 
 conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 app = Flask(__name__)
-CLARA_PICS = [
-    "https://raw.githubusercontent.com/visibilitecom/bot-messenger-gpt/main/images/clara1.png",
-    "https://raw.githubusercontent.com/visibilitecom/bot-messenger-gpt/main/images/clara2.png",
-    "https://raw.githubusercontent.com/visibilitecom/bot-messenger-gpt/main/images/clara3.png",
-]
 
 def get_user(uid):
     with conn.cursor() as cur:
@@ -50,32 +44,15 @@ def save_user(uid, data):
         )
         conn.commit()
 
-def send_typing(sid):
-    requests.post(
-        "https://graph.facebook.com/v18.0/me/messages",
-        params={"access_token": PAGE_ACCESS_TOKEN},
-        headers={"Content-Type": "application/json"},
-        json={"recipient": {"id": sid}, "sender_action": "typing_on"},
-    )
-
-def send_message(rid, text):
-    requests.post(
-        "https://graph.facebook.com/v18.0/me/messages",
-        params={"access_token": PAGE_ACCESS_TOKEN},
-        headers={"Content-Type": "application/json"},
-        json={"recipient": {"id": rid}, "message": {"text": text}},
-    )
-
-def send_image(rid, url):
-    requests.post(
-        "https://graph.facebook.com/v18.0/me/messages",
-        params={"access_token": PAGE_ACCESS_TOKEN},
-        headers={"Content-Type": "application/json"},
-        json={
-            "recipient": {"id": rid},
-            "message": {"attachment": {"type": "image", "payload": {"url": url, "is_reusable": True}}}
-        },
-    )
+def send_message_ig(user_id, text):
+    url = f"https://graph.facebook.com/v18.0/me/messages"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "messaging_product": "instagram",
+        "recipient": {"id": user_id},
+        "message": {"text": text}
+    }
+    requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
 
 @app.route('/webhook', methods=['GET'])
 def verify():
@@ -88,10 +65,14 @@ def webhook():
     data = request.get_json()
     if 'entry' in data:
         for entry in data['entry']:
-            for event in entry.get('messaging', []):
-                sid = event['sender']['id']
-                if 'message' in event and 'text' in event['message']:
-                    handle_message(sid, event['message']['text'])
+            changes = entry.get('changes', [])
+            for change in changes:
+                value = change.get('value', {})
+                if value.get("messaging_product") == "instagram":
+                    sender_id = value.get("from")
+                    message = value.get("message", {}).get("text")
+                    if sender_id and message:
+                        handle_message(sender_id, message)
     return "ok", 200
 
 def handle_message(sender_id, msg):
@@ -104,9 +85,6 @@ def handle_message(sender_id, msg):
     if len(u["history"]) > 10:
         u["history"] = u["history"][-10:]
 
-    send_typing(sender_id)
-    time.sleep(random.uniform(1.5, 3.0))
-
     sys_prompt = "Tu es Clara, une femme spontanée, joueuse, élégante. Tu ne dis jamais que tu es une IA."
     msgs = [{"role": "system", "content": sys_prompt}] + u["history"]
 
@@ -114,15 +92,12 @@ def handle_message(sender_id, msg):
         rsp = client.chat.completions.create(model="gpt-4o", messages=msgs)
         reply = rsp.choices[0].message.content.strip()
         u["history"].append({"role": "assistant", "content": reply})
-        send_message(sender_id, reply)
-    except:
-        send_message(sender_id, "Oups, bug ! Répète voir ?")
+        send_message_ig(sender_id, reply)
+    except Exception as e:
+        print("Erreur GPT :", e)
+        send_message_ig(sender_id, "Oups, petit bug ! Tu peux me répéter ?")
 
     save_user(sender_id, u)
-
-@app.route('/privacy')
-def privacy():
-    return send_from_directory('.', 'privacy.html')
 
 @app.route('/healthz')
 def healthz():
