@@ -16,6 +16,8 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
+INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID")
+INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET")
 
 if not all([VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, DATABASE_URL]):
     raise ValueError("❌ Une ou plusieurs variables d'environnement sont manquantes.")
@@ -30,14 +32,12 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 app = Flask(__name__)
 
 # Fonction pour récupérer les infos utilisateur
-
 def get_user(uid):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM user_memory WHERE user_id = %s", (uid,))
         return cur.fetchone()
 
 # Fonction pour sauvegarder l'état utilisateur
-
 def save_user(uid, data):
     with conn.cursor() as cur:
         cur.execute(
@@ -55,7 +55,6 @@ def save_user(uid, data):
         conn.commit()
 
 # Fonction pour envoyer une réponse Instagram
-
 def send_message_ig(user_id, text):
     url = "https://graph.facebook.com/v18.0/me/messages"
     headers = {"Content-Type": "application/json"}
@@ -67,7 +66,6 @@ def send_message_ig(user_id, text):
     requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
 
 # Route pour la vérification du webhook
-
 @app.route('/webhook', methods=['GET'])
 def verify():
     mode = request.args.get("hub.mode")
@@ -79,7 +77,6 @@ def verify():
     return "Erreur de vérification", 403
 
 # Réception des événements Instagram (DM)
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -96,7 +93,6 @@ def webhook():
     return "ok", 200
 
 # Traitement du message utilisateur avec GPT-4o
-
 def handle_message(sender_id, msg):
     u = get_user(sender_id) or {"profile": {}, "history": [], "sent_link": False}
     u["history"] = u.get("history", [])
@@ -121,14 +117,28 @@ def handle_message(sender_id, msg):
 
     save_user(sender_id, u)
 
-# Route de santé pour Render
+# Route pour la redirection Instagram OAuth
+@app.route('/auth/instagram/callback')
+def instagram_callback():
+    code = request.args.get("code")
+    error = request.args.get("error")
 
+    if error:
+        return f"❌ Erreur lors de l'autorisation : {error}", 400
+
+    if not code:
+        return "❌ Code d'autorisation manquant.", 400
+
+    print("✅ Code reçu depuis Instagram :", code)
+
+    return "✅ Autorisation réussie ! Vous pouvez fermer cette fenêtre.", 200
+
+# Route de santé pour Render
 @app.route('/healthz')
 def healthz():
     return "ok", 200
 
 # Lancement de l'application
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
