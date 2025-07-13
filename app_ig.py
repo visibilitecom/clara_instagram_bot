@@ -16,6 +16,15 @@ PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+is_render = os.environ.get("RENDER", "0") == "1"
+
+# Affichage debug (en local uniquement)
+if not is_render:
+    print("🔐 VERIFY_TOKEN:", VERIFY_TOKEN)
+    print("🔐 PAGE_ACCESS_TOKEN:", PAGE_ACCESS_TOKEN[:10] + "..." if PAGE_ACCESS_TOKEN else "❌ VIDE")
+    print("🔐 OPENAI_API_KEY:", OPENAI_API_KEY[:10] + "..." if OPENAI_API_KEY else "❌ VIDE")
+    print("🔐 DATABASE_URL:", DATABASE_URL[:30] + "..." if DATABASE_URL else "❌ VIDE")
+
 if not all([VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, DATABASE_URL]):
     raise ValueError("❌ Une ou plusieurs variables d'environnement sont manquantes.")
 
@@ -137,8 +146,12 @@ def handle_message(sender_id, msg):
 
 # Envoi du message avec logs détaillés
 def send_message_ig(user_id, text):
+    if not PAGE_ACCESS_TOKEN:
+        print("❌ Le token PAGE_ACCESS_TOKEN est vide. Vérifie le .env ou les variables Render.")
+        return
+
     try:
-        url = "https://graph.facebook.com/v23.0/me/messages"
+        url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "messaging_product": "instagram",
@@ -146,18 +159,19 @@ def send_message_ig(user_id, text):
             "message": {"text": text}
         }
 
-        print("📤 Préparation de l'envoi IG vers :", user_id)
+        print("📤 Envoi vers :", user_id)
         print("📤 Message :", text)
 
-        response = requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
+        response = requests.post(url, headers=headers, json=payload)
 
-        print("📤 Envoi IG status:", response.status_code)
-        print("📤 Réponse IG:", response.text)
+        print("📤 Statut :", response.status_code)
+        print("📤 Réponse IG :", response.text)
 
         if response.status_code != 200:
-            print("⚠️ Envoi échoué. Vérifie le token ou l'ID utilisateur.")
+            print("⚠️ Échec de l’envoi. Token, permissions ou ID peuvent être en cause.")
     except Exception as e:
-        print("❌ Exception lors de l’envoi IG :", e)
+        print("❌ Erreur lors de l’envoi IG :", e)
+
 
 # Lecture de la mémoire utilisateur
 def get_user(uid):
