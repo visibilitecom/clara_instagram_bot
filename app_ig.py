@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import openai
 import psycopg
 from psycopg.rows import dict_row
+from flask import render_template
 
 # Chargement des variables d'environnement
 load_dotenv()
