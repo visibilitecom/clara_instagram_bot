@@ -53,6 +53,26 @@ def last_user_id():
         return f"🆔 Dernier sender_id : {latest_user['id']} (à {latest_user['time']})", 200
     return "❌ Aucun message Instagram reçu pour l’instant.", 200
 
+# ✅ Création manuelle de la table user_memory
+@app.route('/init-db')
+def init_db_route():
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_memory (
+                    user_id TEXT PRIMARY KEY,
+                    profile JSONB,
+                    history JSONB,
+                    last_seen TIMESTAMP,
+                    sent_link BOOLEAN DEFAULT FALSE
+                );
+            """)
+            conn.commit()
+        return "✅ Table user_memory créée avec succès", 200
+    except Exception as e:
+        print("❌ Erreur création de la table :", e)
+        return f"Erreur : {e}", 500
+
 # Vérification du webhook Meta
 @app.route('/webhook', methods=['GET'])
 def verify():
@@ -164,22 +184,7 @@ def save_user(uid, data):
         ))
         conn.commit()
 
-# Lancement de l'app Flask avec logs Render mais sans test d'envoi auto
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    is_render = os.environ.get("RENDER", "0") == "1"
-
-    print("🚀 Démarrage de Clara bot sur le port", port)
-
-    if is_render:
-        print("📡 Environnement Render détecté — pas d'envoi automatique (attente d’un vrai message Instagram)")
-    else:
-        print("💻 Environnement local détecté — démarrage sans envoi")
-
-    app.run(host="0.0.0.0", port=port)
-# ... tout ton code précédent inchangé ...
-
-# Route pour tester l’envoi à l’utilisateur le plus récent
+# Test manuel d'envoi
 @app.route('/test-last-user')
 def test_send_to_last_user():
     if latest_user["id"]:
@@ -188,7 +193,7 @@ def test_send_to_last_user():
         return f"✅ Message test envoyé à {latest_user['id']}", 200
     return "❌ Aucun utilisateur Instagram connu pour l'instant.", 200
 
-# Lancement de l'app Flask avec logs Render mais sans test d'envoi auto
+# Lancement
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     is_render = os.environ.get("RENDER", "0") == "1"
@@ -201,4 +206,3 @@ if __name__ == "__main__":
         print("💻 Environnement local détecté — démarrage sans envoi")
 
     app.run(host="0.0.0.0", port=port)
-
