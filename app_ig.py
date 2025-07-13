@@ -143,3 +143,12 @@ def healthz():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+@app.route('/privacy')
+def show_privacy():
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def show_terms():
+    return render_template('condition.html')
+
