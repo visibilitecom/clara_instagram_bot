@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import openai
 import psycopg
 from psycopg.rows import dict_row
-from datetime import datetime  # 🔄 Ajouté pour horodatage
+from datetime import datetime
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -28,6 +28,9 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 # App Flask
 app = Flask(__name__)
 
+# Mémoire temporaire pour afficher le dernier user Instagram ayant écrit
+latest_user = {"id": None, "time": None}
+
 @app.route('/')
 def home():
     return "<h1>🤖 Clara bot est en ligne</h1><p><a href='/privacy'>Politique</a> | <a href='/terms'>Conditions</a></p>"
@@ -43,6 +46,12 @@ def show_terms():
 @app.route('/healthz')
 def healthz():
     return "ok", 200
+
+@app.route('/last-user-id')
+def last_user_id():
+    if latest_user["id"]:
+        return f"🆔 Dernier sender_id : {latest_user['id']} (à {latest_user['time']})", 200
+    return "❌ Aucun message Instagram reçu pour l’instant.", 200
 
 # Vérification du webhook Meta
 @app.route('/webhook', methods=['GET'])
@@ -73,6 +82,8 @@ def webhook():
                 print("💬 Message :", text)
 
                 if sender_id and text:
+                    latest_user["id"] = sender_id
+                    latest_user["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     handle_message(sender_id, text)
 
     return "ok", 200
@@ -104,7 +115,7 @@ def handle_message(sender_id, msg):
 
     save_user(sender_id, user_data)
 
-# Envoi du message avec logs détaillés (scénario 1)
+# Envoi du message avec logs détaillés
 def send_message_ig(user_id, text):
     try:
         url = "https://graph.facebook.com/v23.0/me/messages"
@@ -153,20 +164,7 @@ def save_user(uid, data):
         ))
         conn.commit()
 
-# Test manuel avec gestion d'erreur (scénario 2)
-@app.route('/test-send')
-def test_send():
-    try:
-        user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
-        test_message = "🧪 Ceci est un test avec la v23.0 de Clara bot !"
-        print("➡️ Envoi de test vers :", user_id)
-        send_message_ig(user_id, test_message)
-        return "✅ Message test envoyé via v23.0", 200
-    except Exception as e:
-        print("❌ Erreur dans /test-send :", e)
-        return "❌ Erreur interne", 500
-
-# Lancement de l'app Flask avec test automatique en production
+# Lancement de l'app Flask avec logs Render mais sans test d'envoi auto
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     is_render = os.environ.get("RENDER", "0") == "1"
@@ -174,15 +172,8 @@ if __name__ == "__main__":
     print("🚀 Démarrage de Clara bot sur le port", port)
 
     if is_render:
-        try:
-            test_user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            test_text = f"🧪 Clara est en ligne (Render à {now})"
-            print("📣 Test Render : envoi d’un message de démarrage à", test_user_id)
-            send_message_ig(test_user_id, test_text)
-        except Exception as e:
-            print("❌ Erreur pendant le test de démarrage Render :", e)
+        print("📡 Environnement Render détecté — pas d'envoi automatique (attente d’un vrai message Instagram)")
     else:
-        print("💻 Environnement local détecté : pas de message automatique")
+        print("💻 Environnement local détecté — démarrage sans envoi")
 
     app.run(host="0.0.0.0", port=port)
