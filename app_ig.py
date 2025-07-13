@@ -3,12 +3,11 @@ import time
 import random
 import json
 import requests
-from flask import Flask, request
+from flask import Flask, request, render_template
 from dotenv import load_dotenv
 import openai
 import psycopg
 from psycopg.rows import dict_row
-from flask import render_template
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -77,20 +76,25 @@ def verify():
         return challenge, 200
     return "Erreur de vérification", 403
 
-# Réception des événements Instagram (DM)
+# Réception des événements Instagram (DM) - version robuste
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
+    if not data:
+        return "No data received", 400
+
     if 'entry' in data:
         for entry in data['entry']:
             changes = entry.get('changes', [])
             for change in changes:
                 value = change.get('value', {})
                 if value.get("messaging_product") == "instagram":
-                    sender_id = value.get("from")
-                    message = value.get("message", {}).get("text")
-                    if sender_id and message:
-                        handle_message(sender_id, message)
+                    messages = value.get("messages", [])
+                    for msg in messages:
+                        sender_id = msg.get("from")
+                        text = msg.get("text", {}).get("body")
+                        if sender_id and text:
+                            handle_message(sender_id, text)
     return "ok", 200
 
 # Traitement du message utilisateur avec GPT-4o
@@ -139,10 +143,12 @@ def instagram_callback():
 def healthz():
     return "ok", 200
 
+# Politique de confidentialité
 @app.route('/privacy')
 def show_privacy():
     return render_template('privacy.html')
 
+# Conditions d'utilisation
 @app.route('/terms')
 def show_terms():
     return render_template('condition.html')
@@ -151,5 +157,3 @@ def show_terms():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
-
