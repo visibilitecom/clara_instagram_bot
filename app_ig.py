@@ -103,19 +103,29 @@ def handle_message(sender_id, msg):
 
     save_user(sender_id, user_data)
 
-# Envoi du message avec l'API v23.0
+# Envoi du message avec logs détaillés (scénario 1)
 def send_message_ig(user_id, text):
-    url = "https://graph.facebook.com/v23.0/me/messages"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "messaging_product": "instagram",
-        "recipient": {"id": user_id},
-        "message": {"text": text}
-    }
+    try:
+        url = "https://graph.facebook.com/v23.0/me/messages"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "messaging_product": "instagram",
+            "recipient": {"id": user_id},
+            "message": {"text": text}
+        }
 
-    response = requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
-    print("📤 Envoi IG status:", response.status_code)
-    print("📤 Réponse IG:", response.text)
+        print("📤 Préparation de l'envoi IG vers :", user_id)
+        print("📤 Message :", text)
+
+        response = requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
+
+        print("📤 Envoi IG status:", response.status_code)
+        print("📤 Réponse IG:", response.text)
+
+        if response.status_code != 200:
+            print("⚠️ Envoi échoué. Vérifie le token ou l'ID utilisateur.")
+    except Exception as e:
+        print("❌ Exception lors de l’envoi IG :", e)
 
 # Lecture de la mémoire utilisateur
 def get_user(uid):
@@ -142,13 +152,18 @@ def save_user(uid, data):
         ))
         conn.commit()
 
-# Test manuel
+# Test manuel avec gestion d'erreur (scénario 2)
 @app.route('/test-send')
 def test_send():
-    user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
-    test_message = "🧪 Ceci est un test avec la v23.0 de Clara bot !"
-    send_message_ig(user_id, test_message)
-    return "✅ Message test envoyé via v23.0", 200
+    try:
+        user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
+        test_message = "🧪 Ceci est un test avec la v23.0 de Clara bot !"
+        print("➡️ Envoi de test vers :", user_id)
+        send_message_ig(user_id, test_message)
+        return "✅ Message test envoyé via v23.0", 200
+    except Exception as e:
+        print("❌ Erreur dans /test-send :", e)
+        return "❌ Erreur interne", 500
 
 # Lancement de l'app Flask
 if __name__ == "__main__":
