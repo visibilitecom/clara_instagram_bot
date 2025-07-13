@@ -206,3 +206,23 @@ if __name__ == "__main__":
         print("💻 Environnement local détecté — démarrage sans envoi")
 
     app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    import sys
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+
+    port = int(os.environ.get("PORT", 5000))
+    is_render = os.environ.get("RENDER", "0") == "1"
+
+    print("🚀 Démarrage de Clara bot sur le port", port)
+
+    if is_render:
+        print("📡 Environnement Render détecté — pas d'envoi automatique (attente d’un vrai message Instagram)")
+    else:
+        print("💻 Environnement local détecté — démarrage sans envoi")
+
+    app.run(host="0.0.0.0", port=port)
+
