@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import openai
 import psycopg
 from psycopg.rows import dict_row
+from datetime import datetime  # 🔄 Ajouté pour horodatage
 
 # Chargement des variables d'environnement
 load_dotenv()
@@ -165,7 +166,23 @@ def test_send():
         print("❌ Erreur dans /test-send :", e)
         return "❌ Erreur interne", 500
 
-# Lancement de l'app Flask
+# Lancement de l'app Flask avec test automatique en production
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    is_render = os.environ.get("RENDER", "0") == "1"
+
+    print("🚀 Démarrage de Clara bot sur le port", port)
+
+    if is_render:
+        try:
+            test_user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            test_text = f"🧪 Clara est en ligne (Render à {now})"
+            print("📣 Test Render : envoi d’un message de démarrage à", test_user_id)
+            send_message_ig(test_user_id, test_text)
+        except Exception as e:
+            print("❌ Erreur pendant le test de démarrage Render :", e)
+    else:
+        print("💻 Environnement local détecté : pas de message automatique")
+
     app.run(host="0.0.0.0", port=port)
