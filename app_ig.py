@@ -1,6 +1,4 @@
 import os
-import time
-import random
 import json
 import requests
 from flask import Flask, request, render_template
@@ -16,42 +14,36 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
-INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID")
-INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET")
 
 if not all([VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, DATABASE_URL]):
     raise ValueError("❌ Une ou plusieurs variables d'environnement sont manquantes.")
 
-# Connexion à la base de données
+# Connexion à PostgreSQL
 conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
-# Initialisation du client OpenAI
+# OpenAI client
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# Création de l'application Flask
+# App Flask
 app = Flask(__name__)
 
-# Route d'accueil
 @app.route('/')
 def home():
-    return "<h1>Clara bot est en ligne 💬</h1><p><a href='/privacy'>Politique de confidentialité</a> | <a href='/terms'>Conditions d'utilisation</a></p>"
+    return "<h1>🤖 Clara bot est en ligne</h1><p><a href='/privacy'>Politique</a> | <a href='/terms'>Conditions</a></p>"
 
-# Politique de confidentialité
 @app.route('/privacy')
 def show_privacy():
     return render_template('privacy.html')
 
-# Conditions d'utilisation
 @app.route('/terms')
 def show_terms():
     return render_template('condition.html')
 
-# Route de santé pour Render
 @app.route('/healthz')
 def healthz():
     return "ok", 200
 
-# Vérification du webhook
+# Vérification du webhook Meta
 @app.route('/webhook', methods=['GET'])
 def verify():
     mode = request.args.get("hub.mode")
@@ -59,78 +51,82 @@ def verify():
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
+        print("✅ Webhook vérifié")
         return challenge, 200
-    return "Erreur de vérification", 403
+    return "❌ Échec de la vérification", 403
 
-# Réception des messages Instagram (DM)
+# Réception des DM Instagram
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
-    if not data:
-        return "No data", 400
+    print("📩 Données reçues :\n", json.dumps(data, indent=2))
 
     if 'entry' in data:
         for entry in data['entry']:
-            changes = entry.get('changes', [])
-            for change in changes:
-                value = change.get('value', {})
-                if value.get("messaging_product") == "instagram":
-                    messages = value.get("messages", [])
-                    for msg in messages:
-                        sender_id = msg.get("from")
-                        text = msg.get("text", {}).get("body")
-                        if sender_id and text:
-                            handle_message(sender_id, text)
+            messaging_events = entry.get("messaging", [])
+            for event in messaging_events:
+                sender_id = event.get("sender", {}).get("id")
+                text = event.get("message", {}).get("text")
+
+                print("👤 Sender ID :", sender_id)
+                print("💬 Message :", text)
+
+                if sender_id and text:
+                    handle_message(sender_id, text)
+
     return "ok", 200
 
-# Traitement du message utilisateur avec GPT
+# Traitement du message avec GPT
 def handle_message(sender_id, msg):
-    u = get_user(sender_id) or {"profile": {}, "history": [], "sent_link": False}
-    u["history"] = u.get("history", [])
-    u["profile"] = u.get("profile", {})
-    u["sent_link"] = u.get("sent_link", False)
+    user_data = get_user(sender_id) or {"profile": {}, "history": [], "sent_link": False}
+    user_data["history"].append({"role": "user", "content": msg})
+    user_data["history"] = user_data["history"][-10:]
 
-    u["history"].append({"role": "user", "content": msg})
-    if len(u["history"]) > 10:
-        u["history"] = u["history"][-10:]
-
-    sys_prompt = "Tu es Clara, une femme spontanée, joueuse, élégante. Tu ne dis jamais que tu es une IA."
-    messages = [{"role": "system", "content": sys_prompt}] + u["history"]
+    messages = [
+        {"role": "system", "content": "Tu es Clara, une femme élégante, joueuse, naturelle. Tu ne dis jamais que tu es une IA."},
+        *user_data["history"]
+    ]
 
     try:
-        rsp = client.chat.completions.create(model="gpt-4o", messages=messages)
-        reply = rsp.choices[0].message.content.strip()
-        u["history"].append({"role": "assistant", "content": reply})
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+        reply = response.choices[0].message.content.strip()
+        print("🤖 Réponse GPT :", reply)
+
+        user_data["history"].append({"role": "assistant", "content": reply})
         send_message_ig(sender_id, reply)
     except Exception as e:
-        print("Erreur GPT :", e)
-        send_message_ig(sender_id, "Oups, petit bug ! Tu peux me répéter ?")
-    save_user(sender_id, u)
+        print("❌ Erreur OpenAI :", e)
+        send_message_ig(sender_id, "Oups, petit bug… Tu peux me redire ?")
 
-# Fonction pour envoyer un message à Instagram
+    save_user(sender_id, user_data)
+
+# Envoi du message avec l'API v23.0
 def send_message_ig(user_id, text):
-    url = "https://graph.facebook.com/v18.0/me/messages"
+    url = "https://graph.facebook.com/v23.0/me/messages"
     headers = {"Content-Type": "application/json"}
     payload = {
         "messaging_product": "instagram",
         "recipient": {"id": user_id},
         "message": {"text": text}
     }
-    response = requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
-    if response.status_code != 200:
-        print("Erreur envoi IG :", response.text)
 
-# Récupérer les données utilisateur
+    response = requests.post(url, headers=headers, params={"access_token": PAGE_ACCESS_TOKEN}, json=payload)
+    print("📤 Envoi IG status:", response.status_code)
+    print("📤 Réponse IG:", response.text)
+
+# Lecture de la mémoire utilisateur
 def get_user(uid):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM user_memory WHERE user_id = %s", (uid,))
         return cur.fetchone()
 
-# Sauvegarder l'état utilisateur
+# Sauvegarde mémoire utilisateur
 def save_user(uid, data):
     with conn.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             INSERT INTO user_memory (user_id, profile, history, last_seen, sent_link)
             VALUES (%s, %s, %s, NOW(), %s)
             ON CONFLICT (user_id)
@@ -138,33 +134,23 @@ def save_user(uid, data):
                           history = EXCLUDED.history,
                           last_seen = EXCLUDED.last_seen,
                           sent_link = EXCLUDED.sent_link
-            """,
-            (uid, json.dumps(data["profile"]), json.dumps(data["history"]), data["sent_link"])
-        )
+        """, (
+            uid,
+            json.dumps(data["profile"]),
+            json.dumps(data["history"]),
+            data["sent_link"]
+        ))
         conn.commit()
 
-# Route pour le callback OAuth Instagram
-@app.route('/auth/instagram/callback')
-def instagram_callback():
-    code = request.args.get("code")
-    error = request.args.get("error")
-
-    if error:
-        return f"❌ Erreur lors de l'autorisation : {error}", 400
-    if not code:
-        return "❌ Code d'autorisation manquant.", 400
-
-    print("✅ Code reçu :", code)
-    return "✅ Autorisation réussie ! Vous pouvez fermer cette fenêtre.", 200
-
-# Route de test manuelle pour envoyer un message test à ton compte Instagram
+# Test manuel
 @app.route('/test-send')
 def test_send():
-    user_id = "17841470881545429"  # Ton Instagram User ID
-    test_message = "Ceci est un test automatisé de Clara 🤖"
+    user_id = "17841470881545429"  # Remplace par ton propre ID Instagram
+    test_message = "🧪 Ceci est un test avec la v23.0 de Clara bot !"
     send_message_ig(user_id, test_message)
-    return "✅ Message de test envoyé à Clara !", 200
-# Lancement de l'application
+    return "✅ Message test envoyé via v23.0", 200
+
+# Lancement de l'app Flask
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
