@@ -157,6 +157,13 @@ def instagram_callback():
     print("✅ Code reçu :", code)
     return "✅ Autorisation réussie ! Vous pouvez fermer cette fenêtre.", 200
 
+# Route de test manuelle pour envoyer un message test à ton compte Instagram
+@app.route('/test-send')
+def test_send():
+    user_id = "17841470881545429"  # Ton Instagram User ID
+    test_message = "Ceci est un test automatisé de Clara 🤖"
+    send_message_ig(user_id, test_message)
+    return "✅ Message de test envoyé à Clara !", 200
 # Lancement de l'application
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
