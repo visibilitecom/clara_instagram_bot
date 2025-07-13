@@ -1,10 +1,8 @@
-
 CREATE TABLE IF NOT EXISTS user_memory (
-    id SERIAL PRIMARY KEY,
-    user_id TEXT UNIQUE NOT NULL,
-    first_seen TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT PRIMARY KEY,
     profile JSONB DEFAULT '{}'::jsonb,
     history JSONB DEFAULT '[]'::jsonb,
-    last_seen TIMESTAMPTZ DEFAULT NOW(),
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_link BOOLEAN DEFAULT FALSE
 );
+
