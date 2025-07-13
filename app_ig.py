@@ -177,3 +177,28 @@ if __name__ == "__main__":
         print("💻 Environnement local détecté — démarrage sans envoi")
 
     app.run(host="0.0.0.0", port=port)
+# ... tout ton code précédent inchangé ...
+
+# Route pour tester l’envoi à l’utilisateur le plus récent
+@app.route('/test-last-user')
+def test_send_to_last_user():
+    if latest_user["id"]:
+        test_message = f"🧪 Clara est bien en ligne (test à {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
+        send_message_ig(latest_user["id"], test_message)
+        return f"✅ Message test envoyé à {latest_user['id']}", 200
+    return "❌ Aucun utilisateur Instagram connu pour l'instant.", 200
+
+# Lancement de l'app Flask avec logs Render mais sans test d'envoi auto
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    is_render = os.environ.get("RENDER", "0") == "1"
+
+    print("🚀 Démarrage de Clara bot sur le port", port)
+
+    if is_render:
+        print("📡 Environnement Render détecté — pas d'envoi automatique (attente d’un vrai message Instagram)")
+    else:
+        print("💻 Environnement local détecté — démarrage sans envoi")
+
+    app.run(host="0.0.0.0", port=port)
+
